@@ -1819,7 +1819,7 @@ func (node *DataNodeImpl) GetConnection() bool {
 		}
 	}
 
-	db, err := sql.Open("mysql", node.User+":"+node.Password+"@tcp("+net.JoinHostPort(node.Ip, strconv.Itoa(node.Port))+")/performance_schema"+attributes)
+	db, err := sql.Open("mysql", node.User+":"+node.Password+"@tcp("+net.JoinHostPort(node.Ip, strconv.Itoa(node.Port))+")/information_schema"+attributes)
 
 	//defer db.Close()
 	node.Connection = db
