@@ -32,11 +32,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
-	log "github.com/sirupsen/logrus"
 	global "pxc_scheduler_handler/internal/Global"
 	SQLPxc "pxc_scheduler_handler/internal/Sql/Pcx"
 	SQLProxy "pxc_scheduler_handler/internal/Sql/Proxy"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/go-sql-driver/mysql"
+	log "github.com/sirupsen/logrus"
 )
 
 type DataCluster interface {
@@ -765,6 +767,7 @@ func (cluster *DataClusterImpl) cleanUpForLeftOver() bool {
 
 // just check if we have identify failover node if not notify with HUGE alert
 func (cluster *DataClusterImpl) checkFailoverIfFound() bool {
+	spew.Dump(cluster)
 	if cluster.RequireFailover &&
 		len(cluster.WriterNodes) < 1 &&
 		cluster.FailOverNode.HostgroupId == 0 {
