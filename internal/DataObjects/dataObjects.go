@@ -769,7 +769,7 @@ func (cluster *DataClusterImpl) cleanUpForLeftOver() bool {
 
 // just check if we have identify failover node if not notify with HUGE alert
 func (cluster *DataClusterImpl) checkFailoverIfFound() bool {
-	spew.Dump(cluster)
+	//spew.Dump(cluster)
 	if cluster.RequireFailover &&
 		len(cluster.WriterNodes) < 1 &&
 		cluster.FailOverNode.HostgroupId == 0 {
