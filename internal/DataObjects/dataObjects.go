@@ -2148,7 +2148,7 @@ func (node *DataNodeImpl) setParameters() {
 	node.WsrepSegment = global.ToInt(node.WsrepProvider["gmcast.segment"])
 	node.WsrepStatus = global.ToInt(node.Status["wsrep_local_state"])
 	node.ReadOnly = global.ToBool(node.Variables["read_only"], "on")
-
+	spew.Dump(node)
 }
 
 // Sync Map
