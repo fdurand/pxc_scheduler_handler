@@ -422,7 +422,9 @@ func (cluster *DataClusterImpl) loadNodes(connectionProxy *sql.DB) bool {
 	cluster.OffLineReaders = make(map[string]DataNodeImpl)
 
 	sqlCommand := strings.ReplaceAll(SQLProxy.Dml_Select_mysql_nodes, "?", sb.String())
+	spew.Dump(sqlCommand)
 	recordset, err := connectionProxy.Query(sqlCommand)
+	spew.Dump(recordset)
 	sb.Reset()
 
 	if err != nil {
