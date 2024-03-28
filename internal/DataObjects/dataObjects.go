@@ -2129,7 +2129,8 @@ func (node DataNodeImpl) getInfo(wg *global.MyWaitGroup, cluster *DataClusterImp
 // here we set and normalize the parameters coming from different sources for the PXC object
 func (node *DataNodeImpl) setParameters() {
 	node.WsrepLocalIndex = node.PxcView.LocalIndex
-	node.PxcMaintMode = node.Variables["pxc_maint_mode"]
+	node.PxcMaintMode = "DISABLED"
+	//node.Variables["pxc_maint_mode"]
 	node.WsrepConnected = global.ToBool(node.Status["wsrep_connected"], "ON")
 	node.WsrepDesinccount = global.ToInt(node.Status["wsrep_desync_count"])
 	node.WsrepDonorrejectqueries = global.ToBool(node.Variables["wsrep_sst_donor_rejects_queries"], "ON")
