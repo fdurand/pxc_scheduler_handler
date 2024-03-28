@@ -1883,7 +1883,7 @@ func (node *DataNodeImpl) getNodeInternalInformation(dml string) map[string]stri
 	for recordset.Next() {
 		recordset.Scan(&varName,
 			&varValue)
-		variables[varName] = varValue
+		variables[strings.ToLower(varName)] = varValue
 	}
 
 	return variables
@@ -2148,7 +2148,7 @@ func (node *DataNodeImpl) setParameters() {
 	node.WsrepSegment = global.ToInt(node.WsrepProvider["gmcast.segment"])
 	node.WsrepStatus = global.ToInt(node.Status["wsrep_local_state"])
 	node.ReadOnly = global.ToBool(node.Variables["read_only"], "on")
-	spew.Dump(node)
+	spew.Dump(node.WsrepClusterStatus)
 }
 
 // Sync Map
