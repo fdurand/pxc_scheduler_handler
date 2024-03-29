@@ -118,6 +118,8 @@ type GlobalScheduler struct {
 	LockFileTimeout    int64
 	LockClusterTimeout int64
 	LockRefreshTime    int64
+	MariaDB            bool
+	TrackDataBase      string
 }
 
 // Methods to return the config as map

@@ -53,6 +53,9 @@ Global:
 	logTarget : [stdout] Can be either a file or stdout
 	logFile : In case file for loging define the target
 	OS : for future use
+	MariaDB : define if the backend server are MariaDB
+	TrackDataBase : Name of the database to test if it exist
+
 ProxySQL
 	port : [6032] Port used to connect
 	host : [127.0.0.1] IP address used to connect to ProxySQL

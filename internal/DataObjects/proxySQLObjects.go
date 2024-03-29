@@ -21,12 +21,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"net"
 	global "pxc_scheduler_handler/internal/Global"
 	SQL "pxc_scheduler_handler/internal/Sql/Proxy"
 	"strconv"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 /*

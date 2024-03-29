@@ -146,6 +146,7 @@ type DataNodeImpl struct {
 	UseSsl            bool
 	User              string
 	Variables         map[string]string
+	Track             map[string]string
 	Weight            int
 	PingTimeout       int
 
@@ -169,6 +170,7 @@ type DataNodeImpl struct {
 	WsrepNodeName           string
 	HasPrimaryState         bool
 	PxcView                 PxcClusterView
+	MariaDB                 bool
 }
 
 type DataClusterImpl struct {
@@ -668,6 +670,7 @@ func (cluster *DataClusterImpl) alignNodeValues(destination DataNodeImpl, source
 	destination.ActionType = source.ActionType
 	destination.Variables = source.Variables
 	destination.Status = source.Status
+	destination.Track = source.Track
 	destination.PxcMaintMode = source.PxcMaintMode
 	destination.PxcView = source.PxcView
 	//destination.RetryUp = source.RetryUp
@@ -1889,13 +1892,21 @@ func (node *DataNodeImpl) getNodeInternalInformation(dml string) map[string]stri
 	return variables
 }
 
-func (node *DataNodeImpl) getNodeInformations(what string) map[string]string {
+func (node *DataNodeImpl) getNodeInformations(what string, cluster *DataClusterImpl) map[string]string {
 
 	switch dml := strings.ToLower(what); dml {
 	case "variables":
+		if cluster.config.Global.MariaDB {
+			return node.getNodeInternalInformation(SQLPxc.Dml_get_mariadb_variables)
+		}
 		return node.getNodeInternalInformation(SQLPxc.Dml_get_variables)
 	case "status":
+		if cluster.config.Global.MariaDB {
+			return node.getNodeInternalInformation(SQLPxc.Dml_get_mariadb_status)
+		}
 		return node.getNodeInternalInformation(SQLPxc.Dml_get_status)
+	case "track":
+		return node.getNodeInternalInformation(strings.ReplaceAll(SQLPxc.Dml_get_track_database_status, "?", cluster.config.Global.TrackDataBase))
 	//case "pxc_view":
 	//	return node.getNodeInternalInformation( strings.ReplaceAll( SQLPxc.Dml_get_pxc_view,"?",node.Variables["server_uuid"]))
 	default:
@@ -2088,8 +2099,12 @@ func (node DataNodeImpl) getInfo(wg *global.MyWaitGroup, cluster *DataClusterImp
 	*/
 	// get variables and status first then pxc_view
 	if !node.NodeTCPDown {
-		node.Variables = node.getNodeInformations("variables")
-		node.Status = node.getNodeInformations("status")
+		node.Variables = node.getNodeInformations("variables", cluster)
+		node.Status = node.getNodeInformations("status", cluster)
+		if cluster.config.Global.TrackDataBase != "" {
+			node.Track = node.getNodeInformations("track", cluster)
+		}
+		node.MariaDB = cluster.config.Global.MariaDB
 		if node.Variables["server_uuid"] != "" {
 			node.PxcView = node.getPxcView(strings.ReplaceAll(SQLPxc.Dml_get_pxc_view, "?", node.Status["wsrep_gcomm_uuid"]))
 		}
@@ -2129,8 +2144,12 @@ func (node DataNodeImpl) getInfo(wg *global.MyWaitGroup, cluster *DataClusterImp
 // here we set and normalize the parameters coming from different sources for the PXC object
 func (node *DataNodeImpl) setParameters() {
 	node.WsrepLocalIndex = node.PxcView.LocalIndex
-	node.PxcMaintMode = "DISABLED"
-	//node.Variables["pxc_maint_mode"]
+	// If the backend are MariaDB then set node.PxcMainMode to DISABLED
+	if node.MariaDB {
+		node.PxcMaintMode = "DISABLED"
+	} else {
+		node.PxcMaintMode = node.Variables["pxc_maint_mode"]
+	}
 	node.WsrepConnected = global.ToBool(node.Status["wsrep_connected"], "ON")
 	node.WsrepDesinccount = global.ToInt(node.Status["wsrep_desync_count"])
 	node.WsrepDonorrejectqueries = global.ToBool(node.Variables["wsrep_sst_donor_rejects_queries"], "ON")
