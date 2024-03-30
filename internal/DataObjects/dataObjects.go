@@ -145,7 +145,7 @@ type DataNodeImpl struct {
 	UseSsl            bool
 	User              string
 	Variables         map[string]string
-	Track             map[string]string
+	Track             string
 	Weight            int
 	PingTimeout       int
 
@@ -2083,6 +2083,20 @@ func (node *DataNodeImpl) getPxcView(dml string) PxcClusterView {
 
 }
 
+// from schema
+func (node *DataNodeImpl) getSchemaView(dml string) string {
+	recordset, err := node.Connection.Query(dml)
+	if err != nil {
+		log.Error(err.Error())
+	}
+	var schema string
+	for recordset.Next() {
+		recordset.Scan(&schema)
+	}
+	return schema
+
+}
+
 // We parallelize the information retrieval using goroutine
 func (node DataNodeImpl) getInfo(wg *global.MyWaitGroup, cluster *DataClusterImpl) int {
 	node.MariaDB = cluster.config.Global.MariaDB
@@ -2102,7 +2116,7 @@ func (node DataNodeImpl) getInfo(wg *global.MyWaitGroup, cluster *DataClusterImp
 		node.Variables = node.getNodeInformations("variables", cluster)
 		node.Status = node.getNodeInformations("status", cluster)
 		if cluster.config.Global.TrackDataBase != "" {
-			node.Track = node.getNodeInformations("track", cluster)
+			node.Track = node.getSchemaView(strings.ReplaceAll(SQLPxc.Dml_get_track_database_status, "?", cluster.config.Global.TrackDataBase))
 		}
 		if node.Variables["server_uuid"] != "" {
 			node.PxcView = node.getPxcView(strings.ReplaceAll(SQLPxc.Dml_get_pxc_view, "?", node.Status["wsrep_gcomm_uuid"]))
