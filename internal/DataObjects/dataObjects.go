@@ -36,7 +36,6 @@ import (
 	SQLPxc "pxc_scheduler_handler/internal/Sql/Pcx"
 	SQLProxy "pxc_scheduler_handler/internal/Sql/Proxy"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/go-sql-driver/mysql"
 	log "github.com/sirupsen/logrus"
 )
@@ -424,7 +423,7 @@ func (cluster *DataClusterImpl) loadNodes(connectionProxy *sql.DB) bool {
 	cluster.OffLineReaders = make(map[string]DataNodeImpl)
 
 	sqlCommand := strings.ReplaceAll(SQLProxy.Dml_Select_mysql_nodes, "?", sb.String())
-	spew.Dump(sqlCommand)
+
 	recordset, err := connectionProxy.Query(sqlCommand)
 
 	sb.Reset()
@@ -676,6 +675,7 @@ func (cluster *DataClusterImpl) alignNodeValues(destination DataNodeImpl, source
 	//destination.RetryUp = source.RetryUp
 	//destination.RetryDown = source.RetryDown
 	destination.Processed = source.Processed
+	destination.MariaDB = cluster.config.Global.MariaDB
 	destination.setParameters()
 	return destination
 }
@@ -772,7 +772,6 @@ func (cluster *DataClusterImpl) cleanUpForLeftOver() bool {
 
 // just check if we have identify failover node if not notify with HUGE alert
 func (cluster *DataClusterImpl) checkFailoverIfFound() bool {
-	//spew.Dump(cluster)
 	if cluster.RequireFailover &&
 		len(cluster.WriterNodes) < 1 &&
 		cluster.FailOverNode.HostgroupId == 0 {
@@ -2086,6 +2085,7 @@ func (node *DataNodeImpl) getPxcView(dml string) PxcClusterView {
 
 // We parallelize the information retrieval using goroutine
 func (node DataNodeImpl) getInfo(wg *global.MyWaitGroup, cluster *DataClusterImpl) int {
+	node.MariaDB = cluster.config.Global.MariaDB
 	if global.Performance {
 		global.SetPerformanceObj(fmt.Sprintf("Get info for node %s", node.Dns), true, log.DebugLevel)
 	}
@@ -2104,7 +2104,6 @@ func (node DataNodeImpl) getInfo(wg *global.MyWaitGroup, cluster *DataClusterImp
 		if cluster.config.Global.TrackDataBase != "" {
 			node.Track = node.getNodeInformations("track", cluster)
 		}
-		node.MariaDB = cluster.config.Global.MariaDB
 		if node.Variables["server_uuid"] != "" {
 			node.PxcView = node.getPxcView(strings.ReplaceAll(SQLPxc.Dml_get_pxc_view, "?", node.Status["wsrep_gcomm_uuid"]))
 		}
@@ -2168,7 +2167,6 @@ func (node *DataNodeImpl) setParameters() {
 	node.WsrepSegment = global.ToInt(node.WsrepProvider["gmcast.segment"])
 	node.WsrepStatus = global.ToInt(node.Status["wsrep_local_state"])
 	node.ReadOnly = global.ToBool(node.Variables["read_only"], "on")
-	spew.Dump(node.WsrepClusterStatus)
 }
 
 // Sync Map
