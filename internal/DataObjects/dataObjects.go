@@ -36,7 +36,6 @@ import (
 	SQLPxc "pxc_scheduler_handler/internal/Sql/Pcx"
 	SQLProxy "pxc_scheduler_handler/internal/Sql/Proxy"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/go-sql-driver/mysql"
 	log "github.com/sirupsen/logrus"
 )
@@ -673,6 +672,7 @@ func (cluster *DataClusterImpl) alignNodeValues(destination DataNodeImpl, source
 	destination.Status = source.Status
 	destination.Track = source.Track
 	destination.PxcMaintMode = source.PxcMaintMode
+	destination.Track = source.Track
 	destination.PxcView = source.PxcView
 	//destination.RetryUp = source.RetryUp
 	//destination.RetryDown = source.RetryDown
@@ -984,7 +984,8 @@ func (cluster *DataClusterImpl) checkBackOffline(node DataNodeImpl, currentHg Ho
 		node.ProxyStatus == "OFFLINE_SOFT" &&
 		!node.WsrepRejectqueries &&
 		node.WsrepClusterStatus == "Primary" &&
-		node.PxcMaintMode == "DISABLED" {
+		node.PxcMaintMode == "DISABLED" &&
+		node.Track {
 		if node.HostgroupId == cluster.HgWriterId && node.ReadOnly {
 			return node, true
 		}
@@ -1030,6 +1031,7 @@ func (cluster *DataClusterImpl) checkBackPrimary(node DataNodeImpl, currentHg Ho
 		node.WsrepStatus == 4 &&
 		!node.WsrepRejectqueries &&
 		node.PxcMaintMode == "DISABLED" &&
+		node.Track &&
 		node.WsrepClusterStatus == "Primary" {
 		if cluster.RetryUp > 0 {
 			node.RetryUp++
@@ -1049,6 +1051,7 @@ func (cluster *DataClusterImpl) checkBackDesyncButUnderReplicaLag(node DataNodeI
 		node.WsrepStatus == 2 &&
 		!node.WsrepRejectqueries &&
 		node.PxcMaintMode == "DISABLED" &&
+		node.Track &&
 		node.ProxyStatus == "OFFLINE_SOFT" &&
 		node.WsrepClusterStatus == "Primary" {
 		if node.MaxReplicationLag > 0 &&
@@ -1105,6 +1108,7 @@ func (cluster *DataClusterImpl) checkTrackDB(node DataNodeImpl, currentHg Hostgr
 
 func (cluster *DataClusterImpl) checkPxcMaint(node DataNodeImpl, currentHg Hostgroup) bool {
 	if node.PxcMaintMode != "DISABLED" &&
+		!node.Track &&
 		node.ProxyStatus != "OFFLINE_SOFT" &&
 		node.HostgroupId < cluster.ConfigHgRange {
 		node.ActionType = node.MOVE_DOWN_OFFLINE()
@@ -2145,7 +2149,6 @@ func (node DataNodeImpl) getInfo(wg *global.MyWaitGroup, cluster *DataClusterImp
 			} else {
 				node.Track = false
 			}
-			spew.Dump(node.Track)
 		}
 		if node.Variables["server_uuid"] != "" {
 			node.PxcView = node.getPxcView(strings.ReplaceAll(SQLPxc.Dml_get_pxc_view, "?", node.Status["wsrep_gcomm_uuid"]))
