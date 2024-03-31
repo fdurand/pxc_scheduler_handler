@@ -570,7 +570,9 @@ func (node *ProxySQLNodeImpl) executeSQLChanges(SQLActionString []string) bool {
 				tx.Rollback()
 				log.Error("Error executing SQL: ", SQLActionString[i], " Rollback and exit")
 				log.Error(err)
-				return false
+				//Test continue
+				continue
+				//return false
 			}
 		}
 	}
