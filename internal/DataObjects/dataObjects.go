@@ -36,6 +36,7 @@ import (
 	SQLPxc "pxc_scheduler_handler/internal/Sql/Pcx"
 	SQLProxy "pxc_scheduler_handler/internal/Sql/Proxy"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/go-sql-driver/mysql"
 	log "github.com/sirupsen/logrus"
 )
@@ -62,6 +63,7 @@ type DataCluster interface {
 	checkBackPrimary(node DataNodeImpl, currentHg Hostgroup) bool
 	checkBackDesyncButUnderReplicaLag(node DataNodeImpl, currentHg Hostgroup) bool
 	checkReadOnly(node DataNodeImpl, currentHg Hostgroup) bool
+	checkTrackDB(node DataNodeImpl, currentHg Hostgroup) bool
 	checkPxcMaint(node DataNodeImpl, currentHg Hostgroup) bool
 	checkDonorReject(node DataNodeImpl, currentHg Hostgroup) bool
 	checkRejectQueries(node DataNodeImpl, currentHg Hostgroup) bool
@@ -145,7 +147,7 @@ type DataNodeImpl struct {
 	UseSsl            bool
 	User              string
 	Variables         map[string]string
-	Track             string
+	Track             bool
 	Weight            int
 	PingTimeout       int
 
@@ -924,6 +926,11 @@ func (cluster *DataClusterImpl) evaluateNode(node DataNodeImpl) DataNodeImpl {
 				if cluster.checkReadOnly(node, currentHg) {
 					return node
 				}
+
+				//7 Writer is missing the database
+				if cluster.checkTrackDB(node, currentHg) {
+					return node
+				}
 			}
 
 			/*
@@ -1075,6 +1082,21 @@ func (cluster *DataClusterImpl) checkReadOnly(node DataNodeImpl, currentHg Hostg
 		node.ActionType = node.MOVE_SWAP_WRITER_TO_READER()
 		cluster.ActionNodes[strconv.Itoa(node.HostgroupId)+"_"+node.Dns] = node
 		log.Warning("Node: ", node.Dns, " ", node.WsrepNodeName, " HG: ", currentHg.Id, " Type ", currentHg.Type, " has READ_ONLY ",
+			"moving it to Reader HG ")
+		return true
+	}
+	return false
+}
+
+func (cluster *DataClusterImpl) checkTrackDB(node DataNodeImpl, currentHg Hostgroup) bool {
+	if node.HostgroupId == cluster.HgWriterId &&
+		!node.Track {
+		if cluster.RetryDown > 0 {
+			node.RetryDown++
+		}
+		node.ActionType = node.MOVE_SWAP_WRITER_TO_READER()
+		cluster.ActionNodes[strconv.Itoa(node.HostgroupId)+"_"+node.Dns] = node
+		log.Warning("Node: ", node.Dns, " ", node.WsrepNodeName, " HG: ", currentHg.Id, " Type ", currentHg.Type, " has LOST DATABASE ",
 			"moving it to Reader HG ")
 		return true
 	}
@@ -2115,8 +2137,15 @@ func (node DataNodeImpl) getInfo(wg *global.MyWaitGroup, cluster *DataClusterImp
 	if !node.NodeTCPDown {
 		node.Variables = node.getNodeInformations("variables", cluster)
 		node.Status = node.getNodeInformations("status", cluster)
+		node.Track = true
 		if cluster.config.Global.TrackDataBase != "" {
-			node.Track = node.getSchemaView(strings.ReplaceAll(SQLPxc.Dml_get_track_database_status, "?", cluster.config.Global.TrackDataBase))
+			dbExist := node.getSchemaView(strings.ReplaceAll(SQLPxc.Dml_get_track_database_status, "?", cluster.config.Global.TrackDataBase))
+			if dbExist == cluster.config.Global.TrackDataBase {
+				node.Track = true
+			} else {
+				node.Track = false
+			}
+			spew.Dump(node.Track)
 		}
 		if node.Variables["server_uuid"] != "" {
 			node.PxcView = node.getPxcView(strings.ReplaceAll(SQLPxc.Dml_get_pxc_view, "?", node.Status["wsrep_gcomm_uuid"]))
