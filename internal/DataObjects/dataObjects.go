@@ -894,41 +894,49 @@ func (cluster *DataClusterImpl) evaluateNode(node DataNodeImpl) DataNodeImpl {
 			if node.HostgroupId < cluster.MaintenanceHgRange {
 				// desync
 				if cluster.checkWsrepDesync(node, currentHg) {
+					log.Debug("Node checkWsrepDesync true")
 					return node
 				}
 
 				// Node is in unsafe state we will move to maintenance group Maintenance
 				if cluster.checkAnyNotReadyStatus(node, currentHg) {
+					log.Debug("Node checkAnyNotReadyStatus true")
 					return node
 				}
 
 				//#3) Node/cluster in non primary
 				if cluster.checkNotPrimary(node, currentHg) {
+					log.Debug("Node checkNotPrimary true")
 					return node
 				}
 
 				//# 4) wsrep_reject_queries=NONE
 				if cluster.checkRejectQueries(node, currentHg) {
+					log.Debug("Node checkRejectQueries true")
 					return node
 				}
 
 				//#5) Donor, node donot reject queries =1 size of cluster > 2 of nodes in the same segments
 				if cluster.checkDonorReject(node, currentHg) {
+					log.Debug("Node checkDonorReject true")
 					return node
 				}
 
 				//#6) Node had pxc_maint_mode set to anything except DISABLED, not matter what it will go in OFFLINE_SOFT
 				if cluster.checkPxcMaint(node, currentHg) {
+					log.Debug("Node checkPxcMaint true")
 					return node
 				}
 
 				//7 Writer is READ_ONLY
 				if cluster.checkReadOnly(node, currentHg) {
+					log.Debug("Node checkReadOnly true")
 					return node
 				}
 
 				//7 Writer is missing the database
 				if cluster.checkTrackDB(node, currentHg) {
+					log.Debug("Node checkTrackDB true")
 					return node
 				}
 			}
