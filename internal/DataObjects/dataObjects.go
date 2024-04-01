@@ -1102,13 +1102,12 @@ func (cluster *DataClusterImpl) checkReadOnly(node DataNodeImpl, currentHg Hostg
 func (cluster *DataClusterImpl) checkTrackDB(node DataNodeImpl, currentHg Hostgroup) bool {
 	if node.HostgroupId == cluster.HgWriterId &&
 		!node.Track {
-		if cluster.RetryDown > 0 {
-			node.RetryDown++
-		}
-		node.ActionType = node.MOVE_SWAP_WRITER_TO_READER()
+		node.ActionType = node.MOVE_DOWN_OFFLINE()
+		//when we do not increment retry is because we want an immediate action like in this case. So let us set the retry to max.
+		node.RetryDown = cluster.RetryDown + 1
 		cluster.ActionNodes[strconv.Itoa(node.HostgroupId)+"_"+node.Dns] = node
-		log.Warning("Node: ", node.Dns, " ", node.WsrepNodeName, " HG: ", currentHg.Id, " Type ", currentHg.Type, " has LOST DATABASE ",
-			"moving it to Reader HG ")
+		log.Warning("Node: ", node.Dns, " ", node.WsrepNodeName, " HG: ", currentHg.Id, " Type ", currentHg.Type, " has LOST DATABASE as ", node.PxcMaintMode,
+			" moving it to OFFLINE_SOFT ")
 		return true
 	}
 	return false
