@@ -332,7 +332,7 @@ func (node *ProxySQLNodeImpl) ProcessChanges() bool {
 	}
 
 	var SQLActionString []string
-	var SQLActionsStringOnError []string
+	SQLActionsStringOnError := make(map[int]string)
 
 	log.Info("Processing action node list and build SQL commands")
 	for _, dataNodePxc := range node.ActionNodeList {
@@ -550,7 +550,7 @@ func (node *ProxySQLNodeImpl) SaveRetry(dataNode DataNodeImpl, hg int, ip string
 /*
 We are going to apply all the SQL inside a transaction, so either all or nothing
 */
-func (node *ProxySQLNodeImpl) executeSQLChanges(SQLActionString []string, SQLActionsStringOnError []string) bool {
+func (node *ProxySQLNodeImpl) executeSQLChanges(SQLActionString []string, SQLActionsStringOnError map[int]string) bool {
 	//if nothing to execute just return true
 	if len(SQLActionString) <= 0 {
 		return true
@@ -570,7 +570,6 @@ func (node *ProxySQLNodeImpl) executeSQLChanges(SQLActionString []string, SQLAct
 		if SQLActionString[i] != "" {
 			_, err = tx.ExecContext(ctx, SQLActionString[i])
 			if err != nil {
-				tx.Rollback()
 				log.Error("Error executing SQL: ", SQLActionString[i], " Rollback and try to fix")
 				log.Error(err)
 				if SQLActionsStringOnError[i] != "" {
@@ -583,9 +582,11 @@ func (node *ProxySQLNodeImpl) executeSQLChanges(SQLActionString []string, SQLAct
 					} else {
 						// Retry the previous request
 						_, err = tx.ExecContext(ctx, SQLActionString[i])
-						tx.Rollback()
-						log.Error("Error executing SQL: ", SQLActionString[i], " Rollback")
-						log.Error(err)
+						if err != nil {
+							tx.Rollback()
+							log.Error("Error executing SQL: ", SQLActionString[i], " Rollback")
+							log.Error(err)
+						}
 					}
 				}
 				//Test continue
