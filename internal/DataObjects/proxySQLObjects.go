@@ -48,11 +48,13 @@ type ProxySQLNode interface {
 	MoveNodeDownToOfflineSoft(dataNode DataNodeImpl, hg int, ip string, port int) string
 	MoveNodeUpFromHGCange(dataNode DataNodeImpl, hg int, ip string, port int) string
 	MoveNodeDownToHGCange(dataNode DataNodeImpl, hg int, ip string, port int) string
+	MoveNodeUpFromHGCangeOnError(dataNode DataNodeImpl, hg int, ip string, port int) string
+	MoveNodeDownToHGCangeOnError(dataNode DataNodeImpl, hg int, ip string, port int) string
 	InsertRead(dataNode DataNodeImpl, hg int, ip string, port int) string
 	InsertWrite(dataNode DataNodeImpl, hg int, ip string, port int) string
 	DeleteDataNode(dataNode DataNodeImpl, hg int, ip string, port int) string
 	SaveRetry(dataNode DataNodeImpl, hg int, ip string, port int) string
-	executeSQLChanges(SQLActionString []string) bool
+	executeSQLChanges(SQLActionString []string, SQLActionsStringOnError []string) bool
 }
 
 /*
@@ -332,6 +334,7 @@ func (node *ProxySQLNodeImpl) ProcessChanges() bool {
 	}
 
 	var SQLActionString []string
+	var SQLActionsStringOnError []string
 
 	log.Info("Processing action node list and build SQL commands")
 	for _, dataNodePxc := range node.ActionNodeList {
@@ -354,6 +357,7 @@ func (node *ProxySQLNodeImpl) ProcessChanges() bool {
 		case 1010:
 			if dataNode.RetryUp >= node.MySQLCluster.RetryUp {
 				SQLActionString = append(SQLActionString, node.MoveNodeUpFromHGCange(dataNode, hg, ip, portI))
+				SQLActionsStringOnError[len(SQLActionString)-1] = node.MoveNodeUpFromHGCangeOnError(dataNode, hg, ip, portI)
 			} else {
 				SQLActionString = append(SQLActionString, node.SaveRetry(dataNode, hg, ip, portI))
 			} // "MOVE_UP_HG_CHANGE"
@@ -363,6 +367,7 @@ func (node *ProxySQLNodeImpl) ProcessChanges() bool {
 		case 3001:
 			if dataNode.RetryDown >= node.MySQLCluster.RetryDown {
 				SQLActionString = append(SQLActionString, node.MoveNodeDownToHGCange(dataNode, hg, ip, portI))
+				SQLActionsStringOnError[len(SQLActionString)-1] = node.MoveNodeDownToHGCangeOnError(dataNode, hg, ip, portI)
 			} else {
 				SQLActionString = append(SQLActionString, node.SaveRetry(dataNode, hg, ip, portI))
 			} // "MOVE_DOWN_HG_CHANGE"
@@ -420,7 +425,7 @@ func (node *ProxySQLNodeImpl) ProcessChanges() bool {
 		global.SetPerformanceObj("Process changes - ActionMap - (ProxysqlNode)", false, log.DebugLevel)
 	}
 
-	if !node.executeSQLChanges(SQLActionString) {
+	if !node.executeSQLChanges(SQLActionString, SQLActionsStringOnError) {
 		log.Error("Cannot apply changes error in SQL execution in ProxySQL, Exit with error")
 		return false
 		//os.Exit(1)
@@ -456,6 +461,16 @@ func (node *ProxySQLNodeImpl) MoveNodeUpFromHGCange(dataNode DataNodeImpl, hg in
 }
 func (node *ProxySQLNodeImpl) MoveNodeDownToHGCange(dataNode DataNodeImpl, hg int, ip string, port int) string {
 	myString := fmt.Sprintf(" UPDATE mysql_servers SET hostgroup_id=%d WHERE hostgroup_id=%d AND hostname='%s' AND port=%d", hg+node.Config.Pxcluster.MaintenanceHgRange, hg, ip, port)
+	log.Debug(fmt.Sprintf("Preparing for node  %s:%d HG:%d SQL: %s", ip, port, hg, myString))
+	return myString
+}
+func (node *ProxySQLNodeImpl) MoveNodeUpFromHGCangeOnError(dataNode DataNodeImpl, hg int, ip string, port int) string {
+	myString := fmt.Sprintf(" DELETE FROM mysql_servers WHERE hostgroup_id=%d AND hostname='%s' AND port=%d", hg, ip, port)
+	log.Debug(fmt.Sprintf("Preparing for node  %s:%d HG:%d SQL: %s", ip, port, hg, myString))
+	return myString
+}
+func (node *ProxySQLNodeImpl) MoveNodeDownToHGCangeOnError(dataNode DataNodeImpl, hg int, ip string, port int) string {
+	myString := fmt.Sprintf(" DELETE FROM mysql_servers WHERE hostgroup_id=%d AND hostname='%s' AND port=%d", hg, ip, port)
 	log.Debug(fmt.Sprintf("Preparing for node  %s:%d HG:%d SQL: %s", ip, port, hg, myString))
 	return myString
 }
@@ -547,7 +562,7 @@ func (node *ProxySQLNodeImpl) SaveRetry(dataNode DataNodeImpl, hg int, ip string
 /*
 We are going to apply all the SQL inside a transaction, so either all or nothing
 */
-func (node *ProxySQLNodeImpl) executeSQLChanges(SQLActionString []string) bool {
+func (node *ProxySQLNodeImpl) executeSQLChanges(SQLActionString []string, SQLActionsStringOnError []string) bool {
 	//if nothing to execute just return true
 	if len(SQLActionString) <= 0 {
 		return true
@@ -568,8 +583,23 @@ func (node *ProxySQLNodeImpl) executeSQLChanges(SQLActionString []string) bool {
 			_, err = tx.ExecContext(ctx, SQLActionString[i])
 			if err != nil {
 				tx.Rollback()
-				log.Error("Error executing SQL: ", SQLActionString[i], " Rollback and exit")
+				log.Error("Error executing SQL: ", SQLActionString[i], " Rollback and try to fix")
 				log.Error(err)
+				if SQLActionsStringOnError[i] != "" {
+					_, err = tx.ExecContext(ctx, SQLActionsStringOnError[i])
+					if err != nil {
+						tx.Rollback()
+						log.Error("Error executing SQL: ", SQLActionString[i], " Rollback and exit")
+						log.Error(err)
+						return false
+					} else {
+						// Retry the previous request
+						_, err = tx.ExecContext(ctx, SQLActionString[i])
+						tx.Rollback()
+						log.Error("Error executing SQL: ", SQLActionString[i], " Rollback")
+						log.Error(err)
+					}
+				}
 				//Test continue
 				continue
 				//return false
